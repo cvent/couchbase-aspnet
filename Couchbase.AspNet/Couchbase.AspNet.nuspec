@@ -16,6 +16,6 @@
     <tags>couchbase nosql asp.net</tags>
   </metadata>
   <files>
-	<file src="bin\Release\Couchbase.AspNet.pdb" target="lib\net451\" />
+	<file src="bin\Release\Couchbase.AspNet.pdb" target="lib\net45\" />
   </files>
 </package>
