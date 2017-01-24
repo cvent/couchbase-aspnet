@@ -61,10 +61,18 @@ namespace Couchbase.AspNet.SessionState
                 WriteHeader(ms);
                 var ts = TimeSpan.FromMinutes(Timeout);
 
+                // For logging SET time
+                var log = new Logger();
+                log.StartTimer();
+
                 // Attempt to write the header and fail if the CAS fails
                 var retval = useCas
                     ? bucket.Upsert(CouchbaseSessionStateProvider.HeaderPrefix + id, ms.ToArray(), HeadCas, ts)
                     : bucket.Upsert(CouchbaseSessionStateProvider.HeaderPrefix + id, ms.ToArray(), ts);
+
+                //Stopping the timer
+                log.EndTimer();
+                log.WriteLog("SET Session Header", id);
 
                 status = retval.Status;
                 return retval.Success;
@@ -91,10 +99,18 @@ namespace Couchbase.AspNet.SessionState
             {
                 Data.Serialize(bw);
 
+                // For logging SET time
+                var log = new Logger();
+                log.StartTimer();
+                
                 // Attempt to save the data and fail if the CAS fails
                 var retval = useCas
                     ? bucket.Upsert(CouchbaseSessionStateProvider.DataPrefix + id, ms.ToArray(), DataCas, ts)
                     : bucket.Upsert(CouchbaseSessionStateProvider.DataPrefix + id, ms.ToArray(), ts);
+
+                //Stopping the timer
+                log.EndTimer();
+                log.WriteLog("SET Session Data", id);
 
                 status = retval.Status;
                 return retval.Success;
@@ -168,6 +184,8 @@ namespace Couchbase.AspNet.SessionState
             return Load(CouchbaseSessionStateProvider.HeaderPrefix, CouchbaseSessionStateProvider.DataPrefix, bucket, id, metaOnly);
         }
 
+        
+
         /// <summary>
         /// Loads a session state item from the bucket. This function is publicly accessible
         /// so that you have direct access to session data from another application if necesssary.
@@ -188,8 +206,18 @@ namespace Couchbase.AspNet.SessionState
             string id,
             bool metaOnly)
         {
+            // For logging SET time
+            var log = new Logger();
+            log.StartTimer();
+
             // Read the header value from Couchbase
             var header = bucket.Get<byte[]>(CouchbaseSessionStateProvider.HeaderPrefix + id);
+
+            //Stopping the timer
+            log.EndTimer();
+            log.WriteLog("GET Session Header", id);
+
+
             if (header.Status != ResponseStatus.Success)
             {
                 return null;
@@ -209,8 +237,18 @@ namespace Couchbase.AspNet.SessionState
                 return entry;
             }
 
+            // For logging SET time
+            log.StartTimer();
+
             // Read the data for the item from Couchbase
             var data = bucket.Get<byte[]>(CouchbaseSessionStateProvider.DataPrefix + id);
+
+            //Stopping the timer
+            log.EndTimer();
+            log.WriteLog("GET Session Data", id);
+
+
+
             if (data.Value == null)
             {
                 return null;
