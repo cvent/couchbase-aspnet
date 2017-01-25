@@ -50,12 +50,14 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="Couchbase.NetClient, Version=2.3.8.0, Culture=neutral, PublicKeyToken=05e9c6b5a9ec94c2, processorArchitecture=MSIL">
-      <HintPath>..\packages\CouchbaseNetClient.2.3.8\lib\net45\Couchbase.NetClient.dll</HintPath>
+      <HintPath>..\..\Solution.Cvent\packages\CouchbaseNetClient.2.3.8\lib\net45\Couchbase.NetClient.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=8.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.8.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="log4net">
+      <HintPath>..\..\Solution.Cvent\packages\log4net.2.0.3\lib\net40-full\log4net.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\Solution.Cvent\packages\Newtonsoft.Json.9.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
@@ -69,6 +71,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClusterClient.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="OutputCache\CouchbaseOutputCacheProvider.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="CouchbaseBucketFactory.cs" />
@@ -79,8 +82,13 @@
     <Compile Include="Web\CouchbaseHttpApplication.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app.config" />
+    <None Include="app.config">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Service References\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

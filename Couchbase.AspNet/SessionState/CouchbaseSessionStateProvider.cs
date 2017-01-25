@@ -27,6 +27,7 @@ namespace Couchbase.AspNet.SessionState
         {
         }
 
+
         /// <summary>
         /// Gets the name of the provider
         /// </summary>
@@ -59,6 +60,8 @@ namespace Couchbase.AspNet.SessionState
         public static string HeaderPrefix =
             (System.Web.Hosting.HostingEnvironment.SiteName ?? string.Empty).Replace(" ", "-") + "+" +
             System.Web.Hosting.HostingEnvironment.ApplicationVirtualPath + "info-";
+
+
 
         /// <summary>
         /// Defines the prefix for the actual session store data stored in the Couchbase bucket. Must also be unique for
@@ -138,6 +141,7 @@ namespace Couchbase.AspNet.SessionState
                 //the app domain has already shutdown
             }
         }
+
 
         /// <summary>
         /// Takes as input the HttpContext instance for the current request and performs any 
