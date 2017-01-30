@@ -63,12 +63,17 @@ namespace Couchbase.AspNet.SessionState
             using (var ms = new MemoryStream()) {
                 WriteHeader(ms);
                 var ts = TimeSpan.FromMinutes(Timeout);
+                var clock = new Timer();
 
+                clock.Start();
                 // Attempt to write the header and fail if the CAS fails
                 var retval = useCas
                     ? bucket.Upsert(CouchbaseSessionStateProvider.HeaderPrefix + id, ms.ToArray(), HeadCas, ts)
                     : bucket.Upsert(CouchbaseSessionStateProvider.HeaderPrefix + id, ms.ToArray(), ts);
 
+                clock.End();
+                clock.WriteLog("SET Header", CouchbaseSessionStateProvider.HeaderPrefix + id);
+                
                 status = retval.Status;
                 return retval.Success;
             }
@@ -89,14 +94,19 @@ namespace Couchbase.AspNet.SessionState
             out ResponseStatus status)
         {
             var ts = TimeSpan.FromMinutes(Timeout);
+            var clock = new Timer();
             using (var ms = new MemoryStream())
                 using (var bw = new BinaryWriter(ms)) {
                     Data.Serialize(bw);
 
+                    clock.Start();
                     // Attempt to save the data and fail if the CAS fails
                     var retval = useCas
                         ? bucket.Upsert(CouchbaseSessionStateProvider.DataPrefix + id, ms.ToArray(), DataCas, ts)
                         : bucket.Upsert(CouchbaseSessionStateProvider.DataPrefix + id, ms.ToArray(), ts);
+
+                    clock.End();
+                    clock.WriteLog("SET Data", CouchbaseSessionStateProvider.HeaderPrefix + id);
 
                     status = retval.Status;
                     return retval.Success;
@@ -188,7 +198,10 @@ namespace Couchbase.AspNet.SessionState
             IBucket bucket,
             string id,
             bool metaOnly)
-        {
+         {
+            var clock = new Timer();
+
+            clock.Start();
             // Read the header value from Couchbase
             var header = bucket.Get<byte[]>(CouchbaseSessionStateProvider.HeaderPrefix + id);
             if (header.Status != ResponseStatus.Success) {
@@ -205,16 +218,21 @@ namespace Couchbase.AspNet.SessionState
                 return null;
             }
 
+            clock.End();
+            clock.WriteLog("GET Header", CouchbaseSessionStateProvider.HeaderPrefix + id); clock.End();
+
             if (_log.IsDebugEnabled) {
                 _log.Debug(JsonConvert.SerializeObject(
-                    new {
+                    new
+                    {
                         Key = CouchbaseSessionStateProvider.HeaderPrefix + id,
                         Status = header.Status.ToString(),
                         header.Message,
-                        header.Exception
+                        header.Exception,
                     }
                 ));
             }
+
             // Deserialize the header values
             SessionStateItem entry;
             using (var ms = new MemoryStream(header.Value)) {
@@ -227,8 +245,13 @@ namespace Couchbase.AspNet.SessionState
                 return entry;
             }
 
+            clock.Start();
             // Read the data for the item from Couchbase
             var data = bucket.Get<byte[]>(CouchbaseSessionStateProvider.DataPrefix + id);
+
+            clock.End();
+            clock.WriteLog("GET Data", CouchbaseSessionStateProvider.HeaderPrefix + id);
+
             if (data.Value == null) {
                 return null;
             }
@@ -265,8 +288,14 @@ namespace Couchbase.AspNet.SessionState
             IBucket bucket,
             string id)
         {
+            var clock = new Timer();
+            clock.Start();
+
             bucket.Remove(CouchbaseSessionStateProvider.DataPrefix + id);
             bucket.Remove(CouchbaseSessionStateProvider.HeaderPrefix + id);
+
+            clock.End();
+            clock.WriteLog("Removing Session State", CouchbaseSessionStateProvider.HeaderPrefix + id);
         }
     }
 }
