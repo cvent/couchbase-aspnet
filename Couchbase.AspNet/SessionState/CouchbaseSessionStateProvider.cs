@@ -312,6 +312,16 @@ namespace Couchbase.AspNet.SessionState
                     e = SessionStateItem.Load(bucket, id, false);
                     if (e == null)
                         return null;
+
+                    _log.Warn(JsonConvert.SerializeObject(
+                        new {
+                            message = "AcquireLock loop reached in GetSessionStoreItem",
+                            id,
+                            e.LockTime, // the time the lock was acquired (from a different request)
+                            e.LockId,   // the CAS value (from the same different request)
+                            status
+                        }
+                    ));
                 }
             }
 

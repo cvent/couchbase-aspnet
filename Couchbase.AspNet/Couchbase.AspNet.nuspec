@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>CouchbaseAspNet</id>
-    <version>2.0.1
+    <version>2.0.2
     </version>
     <title>Couchbase ASP.NET Integration</title>
     <authors>Couchbase, Inc.</authors>
