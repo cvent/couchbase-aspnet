@@ -22,9 +22,9 @@ namespace Couchbase.AspNet.SessionState
         private string _configName;
         private string _bucketName;
         private static TimeSpan _executionTimeout;
+        private static LockRetryMonitor _lockRetryMonitor;
 
         private static readonly object _syncObj = new object();
-
         private static readonly ILog _log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         /// <summary>
@@ -85,6 +85,12 @@ namespace Couchbase.AspNet.SessionState
             AppDomain.CurrentDomain.DomainUnload += Application_End;
             ClusterClient.Configure(name, config);
 
+            var maxRetryCount = ProviderHelper.GetAndRemove(config, "maxRetryCount", false);
+            int temp;
+            if (int.TryParse(maxRetryCount, out temp)) {
+                _maxRetryCount = temp;
+            }
+
             lock (_syncObj) {
                 // Create the bucket based off the name provided in the
                 _bucketName = ProviderHelper.GetAndRemove(config, "bucket", false);
@@ -92,6 +98,8 @@ namespace Couchbase.AspNet.SessionState
 
                 var section = (HttpRuntimeSection)ConfigurationManager.GetSection("system.web/httpRuntime");
                 _executionTimeout = section.ExecutionTimeout;
+
+                _lockRetryMonitor = new LockRetryMonitor(_maxRetryCount); // use their pre-existing maxRetryCount
             }
 
             // By default use exclusive session access. But allow it to be overridden in the config file
@@ -106,11 +114,6 @@ namespace Couchbase.AspNet.SessionState
             var dataPrefix = ProviderHelper.GetAndRemove(config, "dataPrefix", false);
             if (dataPrefix != null) {
                 DataPrefix = dataPrefix;
-            }
-            var maxRetryCount = ProviderHelper.GetAndRemove(config, "maxRetryCount", false);
-            var temp = 0;
-            if (int.TryParse(maxRetryCount, out temp)) {
-                _maxRetryCount = temp;
             }
 
             // Make sure no extra attributes are included
@@ -302,6 +305,18 @@ namespace Couchbase.AspNet.SessionState
                         locked = true;
                         lockId = e.LockId;
 
+                        var result = _lockRetryMonitor.Remove(id);
+                        if (result && _log.IsInfoEnabled) {
+                            _log.Info(JsonConvert.SerializeObject(
+                                new {
+                                    message = "Clearing retry count after succesfully waiting for locked object",
+                                    id,
+                                    lockAge,
+                                    lockId,
+                                    ExecutionTimeout = _executionTimeout.TotalSeconds
+                                }
+                            ));
+                        }
                         return e;
                     }
                     if (status == ResponseStatus.KeyNotFound) {
@@ -318,7 +333,7 @@ namespace Couchbase.AspNet.SessionState
                             message = "AcquireLock loop reached in GetSessionStoreItem",
                             id,
                             e.LockTime, // the time the lock was acquired (from a different request)
-                            e.LockId,   // the CAS value (from the same different request)
+                            e.LockId, // the CAS value (from the same different request)
                             status
                         }
                     ));
@@ -340,6 +355,23 @@ namespace Couchbase.AspNet.SessionState
                         ExecutionTimeout = _executionTimeout.TotalSeconds
                     }
                 ));
+            }
+
+            try {
+                _lockRetryMonitor.Increment(id);
+
+            } catch (Exception ex) {
+                _log.Error(JsonConvert.SerializeObject(
+                    new {
+                        message = "Failed to increment retry count for locked object",
+                        id,
+                        lockAge,
+                        lockId,
+                        ExecutionTimeout = _executionTimeout.TotalSeconds
+                    }
+                ), ex);
+
+                throw;
             }
 
             return acquireLock ? null : e;
