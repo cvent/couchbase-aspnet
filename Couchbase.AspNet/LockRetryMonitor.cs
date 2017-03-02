@@ -12,13 +12,20 @@ namespace Couchbase.AspNet
 
         public LockRetryMonitor(int maximumRetries)
         {
-            _sessionIdDictionary = new ConcurrentDictionary<string, int>();
-            _maximumRetries = maximumRetries;
+            // disable the monitor unless there's a valid limit
+            if (maximumRetries > 0) {
+                _sessionIdDictionary = new ConcurrentDictionary<string, int>();
+                _maximumRetries = maximumRetries;                
+            }
         }
 
         public int Increment(
             string id)
         {
+            if (null == _sessionIdDictionary) {
+                return 0;
+            }
+
             int retryCount;
             if (_sessionIdDictionary.TryGetValue(id, out retryCount)) {
                 if (retryCount == _maximumRetries) {
@@ -35,6 +42,11 @@ namespace Couchbase.AspNet
         public bool Remove(
             string id)
         {
+            if (null == _sessionIdDictionary)
+            {
+                return false;
+            }
+
             int retryCount;
             return _sessionIdDictionary.TryRemove(id, out retryCount);
         }

@@ -85,12 +85,6 @@ namespace Couchbase.AspNet.SessionState
             AppDomain.CurrentDomain.DomainUnload += Application_End;
             ClusterClient.Configure(name, config);
 
-            var maxRetryCount = ProviderHelper.GetAndRemove(config, "maxRetryCount", false);
-            int temp;
-            if (int.TryParse(maxRetryCount, out temp)) {
-                _maxRetryCount = temp;
-            }
-
             lock (_syncObj) {
                 // Create the bucket based off the name provided in the
                 _bucketName = ProviderHelper.GetAndRemove(config, "bucket", false);
@@ -99,7 +93,12 @@ namespace Couchbase.AspNet.SessionState
                 var section = (HttpRuntimeSection)ConfigurationManager.GetSection("system.web/httpRuntime");
                 _executionTimeout = section.ExecutionTimeout;
 
-                _lockRetryMonitor = new LockRetryMonitor(_maxRetryCount); // use their pre-existing maxRetryCount
+                // Use a plain old k/v pair because nested applications inherit the couchbase section,
+                // and older versions don't understand maxRetryCount and will throw an exception.
+                // The absence of this setting results in 0 which effectively turns off the monitor.
+                int retries;
+                int.TryParse(ConfigurationManager.AppSettings["lockedSessionRetryLimit"], out retries);
+                _lockRetryMonitor = new LockRetryMonitor(retries);
             }
 
             // By default use exclusive session access. But allow it to be overridden in the config file
@@ -114,6 +113,13 @@ namespace Couchbase.AspNet.SessionState
             var dataPrefix = ProviderHelper.GetAndRemove(config, "dataPrefix", false);
             if (dataPrefix != null) {
                 DataPrefix = dataPrefix;
+            }
+
+            var maxRetryCount = ProviderHelper.GetAndRemove(config, "maxRetryCount", false);
+            int temp;
+            if (int.TryParse(maxRetryCount, out temp))
+            {
+                _maxRetryCount = temp;
             }
 
             // Make sure no extra attributes are included
@@ -359,7 +365,6 @@ namespace Couchbase.AspNet.SessionState
 
             try {
                 _lockRetryMonitor.Increment(id);
-
             } catch (Exception ex) {
                 _log.Error(JsonConvert.SerializeObject(
                     new {
