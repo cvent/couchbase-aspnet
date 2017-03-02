@@ -22,9 +22,9 @@ namespace Couchbase.AspNet.SessionState
         private string _configName;
         private string _bucketName;
         private static TimeSpan _executionTimeout;
+        private static LockRetryMonitor _lockRetryMonitor;
 
         private static readonly object _syncObj = new object();
-
         private static readonly ILog _log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         /// <summary>
@@ -92,6 +92,13 @@ namespace Couchbase.AspNet.SessionState
 
                 var section = (HttpRuntimeSection)ConfigurationManager.GetSection("system.web/httpRuntime");
                 _executionTimeout = section.ExecutionTimeout;
+
+                // Use a plain old k/v pair because nested applications inherit the couchbase section,
+                // and older versions don't understand maxRetryCount and will throw an exception.
+                // The absence of this setting results in 0 which effectively turns off the monitor.
+                int retries;
+                int.TryParse(ConfigurationManager.AppSettings["lockedSessionRetryLimit"], out retries);
+                _lockRetryMonitor = new LockRetryMonitor(retries);
             }
 
             // By default use exclusive session access. But allow it to be overridden in the config file
@@ -107,9 +114,11 @@ namespace Couchbase.AspNet.SessionState
             if (dataPrefix != null) {
                 DataPrefix = dataPrefix;
             }
+
             var maxRetryCount = ProviderHelper.GetAndRemove(config, "maxRetryCount", false);
-            var temp = 0;
-            if (int.TryParse(maxRetryCount, out temp)) {
+            int temp;
+            if (int.TryParse(maxRetryCount, out temp))
+            {
                 _maxRetryCount = temp;
             }
 
@@ -302,6 +311,18 @@ namespace Couchbase.AspNet.SessionState
                         locked = true;
                         lockId = e.LockId;
 
+                        var result = _lockRetryMonitor.Remove(id);
+                        if (result && _log.IsInfoEnabled) {
+                            _log.Info(JsonConvert.SerializeObject(
+                                new {
+                                    message = "Clearing retry count after succesfully waiting for locked object",
+                                    id,
+                                    lockAge,
+                                    lockId,
+                                    ExecutionTimeout = _executionTimeout.TotalSeconds
+                                }
+                            ));
+                        }
                         return e;
                     }
                     if (status == ResponseStatus.KeyNotFound) {
@@ -318,7 +339,7 @@ namespace Couchbase.AspNet.SessionState
                             message = "AcquireLock loop reached in GetSessionStoreItem",
                             id,
                             e.LockTime, // the time the lock was acquired (from a different request)
-                            e.LockId,   // the CAS value (from the same different request)
+                            e.LockId, // the CAS value (from the same different request)
                             status
                         }
                     ));
@@ -340,6 +361,22 @@ namespace Couchbase.AspNet.SessionState
                         ExecutionTimeout = _executionTimeout.TotalSeconds
                     }
                 ));
+            }
+
+            try {
+                _lockRetryMonitor.Increment(id);
+            } catch (Exception ex) {
+                _log.Error(JsonConvert.SerializeObject(
+                    new {
+                        message = "Failed to increment retry count for locked object",
+                        id,
+                        lockAge,
+                        lockId,
+                        ExecutionTimeout = _executionTimeout.TotalSeconds
+                    }
+                ), ex);
+
+                throw;
             }
 
             return acquireLock ? null : e;
