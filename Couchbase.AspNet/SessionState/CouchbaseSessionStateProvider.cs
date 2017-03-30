@@ -319,7 +319,11 @@ namespace Couchbase.AspNet.SessionState
                             id,
                             e.LockTime, // the time the lock was acquired (from a different request)
                             e.LockId,   // the CAS value (from the same different request)
-                            status
+                            status = status.ToString(),
+                            request = new {
+                                context.Request.Url,
+                                identity = context.User.Identity.Name
+                            }
                         }
                     ));
                 }
